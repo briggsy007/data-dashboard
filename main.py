@@ -223,6 +223,115 @@ def api_releases():
     return releases
 
 
+@app.get("/api/gdp-ladder")
+def api_gdp_ladder():
+    """GDP contract ladder: model probs vs live market prices."""
+    HARDCODED_LADDER = [
+        {"strike": 2.0, "ticker": "KXGDP-26APR30-T2.0", "model_prob": 0.722, "market_price": 51, "edge": 0.242, "our_position": 32, "recommended": "HOLD"},
+        {"strike": 2.5, "ticker": "KXGDP-26APR30-T2.5", "model_prob": 0.660, "market_price": 38, "edge": 0.280, "our_position": 10, "recommended": "HOLD"},
+        {"strike": 3.0, "ticker": "KXGDP-26APR30-T3.0", "model_prob": 0.473, "market_price": 29, "edge": 0.183, "our_position": 0, "recommended": "MONITOR"},
+        {"strike": 3.5, "ticker": "KXGDP-26APR30-T3.5", "model_prob": 0.337, "market_price": 24, "edge": 0.097, "our_position": 0, "recommended": "skip"},
+        {"strike": 4.0, "ticker": "KXGDP-26APR30-T4.0", "model_prob": 0.189, "market_price": 8, "edge": 0.109, "our_position": 0, "recommended": "skip"},
+    ]
+    try:
+        import joblib
+        model_path = MODELS_ROOT / "gdp_thresholds.joblib"
+        if not model_path.exists():
+            raise FileNotFoundError("gdp_thresholds.joblib not found")
+
+        import sys as _sys
+        econ_src = Path(r"C:\Users\hunte\.openclaw\workspace\kalshi-econ\src")
+        if str(econ_src) not in _sys.path:
+            _sys.path.insert(0, str(econ_src))
+
+        from features.gdp_monthly_features import build_monthly_features
+        import numpy as np
+
+        models = joblib.load(model_path)
+        df = build_monthly_features(exclude_covid=True)
+        if df.empty:
+            raise ValueError("No features available")
+
+        first_key = next(iter(models))
+        feature_cols = models[first_key]["feature_cols"]
+
+        df_pred = df[df["label"].isna()]
+        latest = df_pred.iloc[-1] if len(df_pred) > 0 else df.iloc[-1]
+        gdpnow = latest.get("gdpnow", None)
+
+        predictions = {}
+        for threshold, model_data in sorted(models.items()):
+            model = model_data["model"]
+            medians = model_data["medians"]
+            X = latest[feature_cols].values.reshape(1, -1)
+            X_df = pd.DataFrame(X, columns=feature_cols)
+            X_filled = X_df.fillna(medians if isinstance(medians, dict) else 0).astype(float)
+            prob = float(model.predict_proba(X_filled)[0, 1])
+            predictions[threshold] = prob
+
+        # Fetch live prices
+        client = _get_kalshi_client()
+        price_map = {}
+        try:
+            markets_data = client.get_econ_markets("KXGDP", status="open")
+            for m in markets_data:
+                if m.get("event_ticker") == "KXGDP-26APR30":
+                    import re
+                    match = re.search(r'(-?\d+\.?\d*)\s*%', m.get("title", ""))
+                    if match:
+                        t = float(match.group(1))
+                        price_map[t] = m.get("yes_bid", m.get("last_price", 50))
+        except Exception:
+            pass
+
+        # Build position map from hardcoded positions
+        pos_map = {}
+        for p in HARDCODED_POSITIONS:
+            ticker = p["ticker"]
+            for threshold in predictions:
+                if f"T{threshold}" in ticker:
+                    pos_map[threshold] = p["qty"]
+
+        ladder = []
+        for threshold, prob in sorted(predictions.items()):
+            ticker = f"KXGDP-26APR30-T{threshold}"
+            market_price = price_map.get(threshold)
+            if market_price is None:
+                fallback = next((h for h in HARDCODED_LADDER if h["strike"] == threshold), None)
+                market_price = fallback["market_price"] if fallback else 50
+            edge = round(prob - market_price / 100.0, 3)
+            qty = pos_map.get(threshold, 0)
+            if qty > 0:
+                action = "HOLD"
+            elif edge > 0.15:
+                action = "MONITOR"
+            else:
+                action = "skip"
+            ladder.append({
+                "strike": threshold,
+                "ticker": ticker,
+                "model_prob": round(prob, 3),
+                "market_price": market_price,
+                "edge": edge,
+                "our_position": qty,
+                "recommended": action,
+            })
+
+        return {
+            "ladder": ladder,
+            "gdpnow": round(float(gdpnow), 2) if gdpnow is not None and pd.notna(gdpnow) else None,
+            "model_auroc": 0.6925,
+        }
+    except Exception as e:
+        return {
+            "ladder": HARDCODED_LADDER,
+            "gdpnow": 3.02,
+            "model_auroc": 0.6925,
+            "fallback": True,
+            "error": str(e),
+        }
+
+
 @app.get("/api/backtest")
 def api_backtest():
     bt_path = ECON_ROOT / "backtest_results.json"

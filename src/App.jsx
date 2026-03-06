@@ -315,6 +315,76 @@ function BacktestPanel({ backtest }) {
   )
 }
 
+// --- GDP Ladder ---
+function GDPLadder({ gdpLadder }) {
+  if (!gdpLadder) return null
+  const { ladder, gdpnow, model_auroc } = gdpLadder
+
+  function edgeColor(edge) {
+    if (edge > 0.20) return 'text-teal-300'
+    if (edge > 0.10) return 'text-yellow-400'
+    return 'text-slate-500'
+  }
+
+  function actionBadge(action) {
+    if (action === 'HOLD') return 'bg-emerald-900/50 text-emerald-400'
+    if (action === 'MONITOR') return 'bg-yellow-900/50 text-yellow-400'
+    return 'bg-slate-800/50 text-slate-600'
+  }
+
+  return (
+    <Card>
+      <div className="mb-3">
+        <div className="text-sm font-bold text-teal-400 font-mono tracking-wider mb-1">
+          === GDP CONTRACT LADDER — Apr 30 Settlement ===
+        </div>
+        <div className="text-xs text-slate-400 font-mono">
+          GDPNow: <span className="text-white">{gdpnow != null ? `${gdpnow}%` : '---'}</span>
+          <span className="mx-2">|</span>
+          Model gate: <span className="text-white">AUROC {model_auroc ?? '---'}</span>
+        </div>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm font-mono">
+          <thead>
+            <tr className="text-slate-500 text-xs uppercase border-b border-slate-700/50">
+              <th className="text-left py-2 pr-4">Strike</th>
+              <th className="text-right py-2 pr-4">Model P</th>
+              <th className="text-right py-2 pr-4">Market</th>
+              <th className="text-right py-2 pr-4">Edge</th>
+              <th className="text-right py-2 pr-4">Qty</th>
+              <th className="text-left py-2">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {ladder.map((row, i) => (
+              <tr
+                key={i}
+                className={`border-b border-slate-800/50 ${row.our_position > 0 ? 'bg-teal-900/10' : 'hover:bg-slate-800/30'}`}
+              >
+                <td className="py-2 pr-4 text-teal-400">T={row.strike.toFixed(1)}%</td>
+                <td className="py-2 pr-4 text-right text-white">{(row.model_prob * 100).toFixed(1)}%</td>
+                <td className="py-2 pr-4 text-right text-slate-300">{row.market_price}c</td>
+                <td className={`py-2 pr-4 text-right font-semibold ${edgeColor(row.edge)}`}>
+                  +{(row.edge * 100).toFixed(1)}%
+                </td>
+                <td className="py-2 pr-4 text-right text-white">
+                  {row.our_position > 0 ? row.our_position : <span className="text-slate-600">0</span>}
+                </td>
+                <td className="py-2">
+                  <span className={`px-2 py-0.5 rounded text-xs ${actionBadge(row.recommended)}`}>
+                    {row.recommended}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  )
+}
+
 // --- Signal Cascade ---
 function SignalCascade({ models }) {
   if (!models) return null
@@ -366,6 +436,7 @@ export default function App() {
   const { data: dataLayer } = useFetch('data-layer')
   const { data: releases } = useFetch('releases')
   const { data: backtest } = useFetch('backtest')
+  const { data: gdpLadder } = useFetch('gdp-ladder')
 
   return (
     <div className="min-h-screen bg-navy-950">
@@ -373,6 +444,7 @@ export default function App() {
       <main className="max-w-7xl mx-auto px-6 py-6 space-y-6">
         <PortfolioRow status={status} releases={releases} />
         <PositionsTable positions={positions} />
+        <GDPLadder gdpLadder={gdpLadder} />
         <ModelsGrid models={models} />
         <div className="grid grid-cols-2 gap-4">
           <DataLayer dataLayer={dataLayer} />
