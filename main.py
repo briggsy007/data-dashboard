@@ -35,32 +35,35 @@ ECON_ROOT = Path(r"C:\Users\hunte\.openclaw\workspace\kalshi-econ\data")
 MODELS_ROOT = Path(r"C:\Users\hunte\.openclaw\workspace\kalshi-econ\models")
 
 
-def kalshi_headers():
-    return {
-        "Authorization": f"Bearer {KALSHI_API_KEY}",
-        "Content-Type": "application/json",
-    }
+def _get_kalshi_client():
+    """Lazy-load KalshiClient from the econ project."""
+    import sys
+    econ_src = Path(r"C:\Users\hunte\.openclaw\workspace\kalshi-econ\src")
+    if str(econ_src) not in sys.path:
+        sys.path.insert(0, str(econ_src))
+    from trading.kalshi_client import KalshiClient
+    return KalshiClient(
+        key_id=KALSHI_API_KEY,
+        private_key_path=PRIVATE_KEY_PATH or str(Path(r"C:\Users\hunte\.openclaw\workspace\polymarket-btc\kalshi_private_key.pem")),
+    )
 
 
 def get_kalshi_balance():
     try:
-        r = requests.get(f"{KALSHI_BASE}/portfolio/balance", headers=kalshi_headers(), timeout=5)
-        if r.status_code == 200:
-            data = r.json()
-            return data.get("balance", 0) / 100.0
+        c = _get_kalshi_client()
+        bal = c.get_balance()
+        return bal.get("balance", 0) / 100.0
     except Exception:
-        pass
-    return None
+        return None
 
 
-def get_kalshi_positions():
+def get_live_price(ticker: str):
     try:
-        r = requests.get(f"{KALSHI_BASE}/portfolio/positions", headers=kalshi_headers(), timeout=5)
-        if r.status_code == 200:
-            return r.json().get("market_positions", [])
+        c = _get_kalshi_client()
+        r = c._get_unauthed(f"/markets/{ticker}", params={})
+        return r.get("market", {}).get("yes_ask")
     except Exception:
-        pass
-    return []
+        return None
 
 
 # --- Hardcoded positions ---
@@ -83,15 +86,7 @@ HARDCODED_POSITIONS = [
 ]
 
 
-def fetch_live_price(ticker: str) -> float | None:
-    try:
-        r = requests.get(f"{KALSHI_BASE}/markets/{ticker}", headers=kalshi_headers(), timeout=5)
-        if r.status_code == 200:
-            market = r.json().get("market", {})
-            return market.get("yes_ask", market.get("last_price", None))
-    except Exception:
-        pass
-    return None
+fetch_live_price = get_live_price  # alias
 
 
 # --- Endpoints ---
@@ -99,7 +94,6 @@ def fetch_live_price(ticker: str) -> float | None:
 @app.get("/api/status")
 def api_status():
     balance = get_kalshi_balance()
-    positions = get_kalshi_positions()
     total_pnl = 0.0
     for p in HARDCODED_POSITIONS:
         live = fetch_live_price(p["ticker"])
@@ -172,43 +166,43 @@ def api_models():
 
 @app.get("/api/data-layer")
 def api_data_layer():
-    def count_parquet_rows(directory: Path) -> int:
-        total = 0
+    def count_parquet(path: Path) -> int:
+        if not path.exists():
+            return 0
+        try:
+            return len(pd.read_parquet(path, columns=[pd.read_parquet(path).columns[0]]))
+        except Exception:
+            return 0
+
+    def count_parquet_dir(directory: Path) -> int:
         if not directory.exists():
             return 0
+        total = 0
         for f in directory.glob("*.parquet"):
             try:
-                df = pd.read_parquet(f)
-                total += len(df)
+                total += len(pd.read_parquet(f, columns=[pd.read_parquet(f).columns[0]]))
             except Exception:
                 pass
         return total
 
-    btc_dir = DATA_ROOT / "raw" / "btc"
-    eth_dir = DATA_ROOT / "raw" / "eth"
-    spy_dir = DATA_ROOT / "raw" / "spy"
-    ob_file = DATA_ROOT / "orderbook_snapshots.parquet"
+    btc_file = DATA_ROOT / "raw" / "btc_raw.parquet"
+    eth_file = DATA_ROOT / "raw" / "eth_raw.parquet"
+    spy_file = DATA_ROOT / "raw" / "spy_raw.parquet"
+    ob_dir   = DATA_ROOT / "raw" / "orderbook"
 
-    ob_rows = 0
-    if ob_file.exists():
-        try:
-            ob_rows = len(pd.read_parquet(ob_file))
-        except Exception:
-            pass
-
+    files = [btc_file, eth_file, spy_file]
     last_updated = None
-    for d in [btc_dir, eth_dir, spy_dir]:
-        if d.exists():
-            for f in d.glob("*.parquet"):
-                mtime = f.stat().st_mtime
-                if last_updated is None or mtime > last_updated:
-                    last_updated = mtime
+    for f in files:
+        if f.exists():
+            mtime = f.stat().st_mtime
+            if last_updated is None or mtime > last_updated:
+                last_updated = mtime
 
     return {
-        "btc_rows": count_parquet_rows(btc_dir),
-        "eth_rows": count_parquet_rows(eth_dir),
-        "spy_rows": count_parquet_rows(spy_dir),
-        "orderbook_rows": ob_rows,
+        "btc_rows": count_parquet(btc_file),
+        "eth_rows": count_parquet(eth_file),
+        "spy_rows": count_parquet(spy_file),
+        "orderbook_rows": count_parquet_dir(ob_dir),
         "last_updated": datetime.fromtimestamp(last_updated).isoformat() if last_updated else None,
     }
 
