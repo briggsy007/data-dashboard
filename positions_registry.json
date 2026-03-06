@@ -1,0 +1,6 @@
+{
+  "KXGDP-26APR30-T2.0":  { "avg_cost_cents": 57.4, "settlement_date": "2026-04-30" },
+  "KXGDP-26APR30-T2.5":  { "avg_cost_cents": 36.0, "settlement_date": "2026-04-30" },
+  "KXFED-27JAN-T3.25":   { "avg_cost_cents": 38.0, "settlement_date": "2027-01-27" },
+  "KXFED-27MAR-T3.00":   { "avg_cost_cents": 51.0, "settlement_date": "2027-03-17" }
+}

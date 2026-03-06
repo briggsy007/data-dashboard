@@ -66,27 +66,46 @@ def get_live_price(ticker: str):
         return None
 
 
-# --- Hardcoded positions ---
+# --- Position registry (cost basis) ---
 
-HARDCODED_POSITIONS = [
-    {
-        "ticker": "KXGDP-26APR30-T2.0",
-        "side": "yes",
-        "qty": 32,
-        "avg_cost_cents": 57.4,
-        "settlement_date": "2026-04-30",
-    },
-    {
-        "ticker": "KXGDP-26APR30-T2.5",
-        "side": "yes",
-        "qty": 10,
-        "avg_cost_cents": 36.0,
-        "settlement_date": "2026-04-30",
-    },
-]
+REGISTRY_PATH = Path(__file__).parent / "positions_registry.json"
+
+def load_registry() -> dict:
+    if REGISTRY_PATH.exists():
+        with open(REGISTRY_PATH) as f:
+            return json.load(f)
+    return {}
 
 
-fetch_live_price = get_live_price  # alias
+def get_live_positions():
+    """Fetch all open positions from Kalshi and merge with local cost basis."""
+    registry = load_registry()
+    try:
+        c = _get_kalshi_client()
+        raw = c.get_positions()
+        positions = []
+        for p in raw:
+            ticker = p.get("ticker", "")
+            qty = p.get("position", 0)
+            if qty == 0:
+                continue
+            reg = registry.get(ticker, {})
+            positions.append({
+                "ticker": ticker,
+                "side": "yes",
+                "qty": qty,
+                "avg_cost_cents": reg.get("avg_cost_cents", 50.0),
+                "settlement_date": reg.get("settlement_date", ""),
+            })
+        return positions
+    except Exception:
+        # Fallback to registry only
+        return [
+            {"ticker": t, "side": "yes", "qty": 0,
+             "avg_cost_cents": v["avg_cost_cents"],
+             "settlement_date": v["settlement_date"]}
+            for t, v in registry.items()
+        ]
 
 
 # --- Endpoints ---
@@ -94,15 +113,16 @@ fetch_live_price = get_live_price  # alias
 @app.get("/api/status")
 def api_status():
     balance = get_kalshi_balance()
+    positions = get_live_positions()
     total_pnl = 0.0
-    for p in HARDCODED_POSITIONS:
-        live = fetch_live_price(p["ticker"])
+    for p in positions:
+        live = get_live_price(p["ticker"])
         if live is not None:
             total_pnl += p["qty"] * (live - p["avg_cost_cents"]) / 100.0
     return {
         "timestamp": datetime.now().isoformat(),
         "balance": balance,
-        "total_positions": len(HARDCODED_POSITIONS),
+        "total_positions": len(positions),
         "total_pnl": round(total_pnl, 2),
     }
 
@@ -110,8 +130,8 @@ def api_status():
 @app.get("/api/positions")
 def api_positions():
     results = []
-    for p in HARDCODED_POSITIONS:
-        live = fetch_live_price(p["ticker"])
+    for p in get_live_positions():
+        live = get_live_price(p["ticker"])
         current = live if live is not None else p["avg_cost_cents"]
         pnl = p["qty"] * (current - p["avg_cost_cents"]) / 100.0
         results.append({
