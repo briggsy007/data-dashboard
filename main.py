@@ -332,6 +332,19 @@ def api_gdp_ladder():
         }
 
 
+@app.get("/api/fomc-ladder")
+def api_fomc_ladder():
+    """FOMC 2027 forward rate distribution from Monte Carlo simulation."""
+    analysis_path = ECON_ROOT / "fomc_2027_analysis.json"
+    if analysis_path.exists():
+        with open(analysis_path) as f:
+            return json.load(f)
+    return {
+        "error": "No analysis file found. Run: python -m scripts.fomc_2027_analysis",
+        "targets": [],
+    }
+
+
 @app.get("/api/backtest")
 def api_backtest():
     bt_path = ECON_ROOT / "backtest_results.json"

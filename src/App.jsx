@@ -385,6 +385,101 @@ function GDPLadder({ gdpLadder }) {
   )
 }
 
+// --- FOMC Ladder ---
+function FOMCLadder({ fomcLadder }) {
+  if (!fomcLadder || !fomcLadder.targets?.length) return null
+
+  function edgeColor(edge) {
+    if (edge == null) return 'text-slate-600'
+    const abs = Math.abs(edge)
+    if (abs > 0.10) return 'text-teal-300'
+    if (abs > 0.05) return 'text-yellow-400'
+    return 'text-slate-500'
+  }
+
+  function signalBadge(signal) {
+    if (signal === 'ACTIONABLE') return 'bg-teal-900/50 text-teal-400'
+    if (signal === 'MONITOR') return 'bg-yellow-900/50 text-yellow-400'
+    return 'bg-slate-800/50 text-slate-600'
+  }
+
+  return (
+    <Card>
+      <div className="mb-3">
+        <div className="text-sm font-bold text-teal-400 font-mono tracking-wider mb-1">
+          === FOMC 2027 FORWARD RATE DISTRIBUTION ===
+        </div>
+        <div className="text-xs text-slate-400 font-mono">
+          Current Rate: <span className="text-white">{fomcLadder.current_rate?.toFixed(2) ?? '---'}%</span>
+          <span className="mx-2">|</span>
+          Neutral: <span className="text-white">{fomcLadder.neutral_rate?.toFixed(1) ?? '3.0'}%</span>
+          <span className="mx-2">|</span>
+          Simulations: <span className="text-white">{(fomcLadder.n_simulations ?? 10000).toLocaleString()}</span>
+        </div>
+      </div>
+      <div className="space-y-4">
+        {fomcLadder.targets.map((target, ti) => {
+          const dist = target.distribution
+          return (
+            <div key={ti}>
+              <div className="flex items-center gap-3 mb-2">
+                <span className="text-sm font-semibold text-slate-300 font-mono">{target.label}</span>
+                <span className="text-xs text-slate-500 font-mono">{target.event} — {target.meetings_away} meetings</span>
+                {dist && (
+                  <span className="text-xs text-slate-400 font-mono ml-auto">
+                    Mean: <span className="text-white">{dist.mean?.toFixed(2)}%</span>
+                    <span className="mx-1">|</span>
+                    Std: <span className="text-white">{dist.std?.toFixed(2)}%</span>
+                    <span className="mx-1">|</span>
+                    [{dist.p10?.toFixed(2)}, {dist.p90?.toFixed(2)}]
+                  </span>
+                )}
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm font-mono">
+                  <thead>
+                    <tr className="text-slate-500 text-xs uppercase border-b border-slate-700/50">
+                      <th className="text-left py-1 pr-4">Threshold</th>
+                      <th className="text-right py-1 pr-4">Model P</th>
+                      <th className="text-right py-1 pr-4">Market</th>
+                      <th className="text-right py-1 pr-4">Edge</th>
+                      <th className="text-left py-1">Signal</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(target.contracts || []).filter(c => c.model_prob_above > 0.01 && c.model_prob_above < 0.99).map((c, ci) => (
+                      <tr key={ci} className="border-b border-slate-800/50 hover:bg-slate-800/30">
+                        <td className="py-1 pr-4 text-teal-400">T={c.threshold?.toFixed(2)}%</td>
+                        <td className="py-1 pr-4 text-right text-white">{(c.model_prob_above * 100).toFixed(1)}%</td>
+                        <td className="py-1 pr-4 text-right text-slate-300">
+                          {c.yes_ask != null ? `${c.yes_ask}c` : 'N/A'}
+                        </td>
+                        <td className={`py-1 pr-4 text-right font-semibold ${edgeColor(c.edge)}`}>
+                          {c.edge != null ? `${c.edge >= 0 ? '+' : ''}${(c.edge * 100).toFixed(1)}%` : 'N/A'}
+                        </td>
+                        <td className="py-1">
+                          <span className={`px-2 py-0.5 rounded text-xs ${signalBadge(c.signal)}`}>
+                            {c.signal || 'N/A'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      {fomcLadder.timestamp && (
+        <div className="text-xs text-slate-600 mt-3 font-mono">
+          Last run: {new Date(fomcLadder.timestamp).toLocaleString()}
+        </div>
+      )}
+    </Card>
+  )
+}
+
 // --- Signal Cascade ---
 function SignalCascade({ models }) {
   if (!models) return null
@@ -437,6 +532,7 @@ export default function App() {
   const { data: releases } = useFetch('releases')
   const { data: backtest } = useFetch('backtest')
   const { data: gdpLadder } = useFetch('gdp-ladder')
+  const { data: fomcLadder } = useFetch('fomc-ladder')
 
   return (
     <div className="min-h-screen bg-navy-950">
@@ -445,6 +541,7 @@ export default function App() {
         <PortfolioRow status={status} releases={releases} />
         <PositionsTable positions={positions} />
         <GDPLadder gdpLadder={gdpLadder} />
+        <FOMCLadder fomcLadder={fomcLadder} />
         <ModelsGrid models={models} />
         <div className="grid grid-cols-2 gap-4">
           <DataLayer dataLayer={dataLayer} />
