@@ -14,7 +14,7 @@ import uvicorn
 
 load_dotenv()
 
-app = FastAPI(title="Kalshi Intelligence Platform")
+app = FastAPI(title="Peanut's Econ Intelligence Platform")
 
 app.add_middleware(
     CORSMiddleware,

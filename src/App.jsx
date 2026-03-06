@@ -50,7 +50,7 @@ function Header({ status }) {
     <header className="bg-navy-900 border-b border-slate-700/50 px-6 py-3 flex items-center justify-between">
       <div className="flex items-center gap-3">
         <h1 className="text-lg font-bold tracking-tight text-teal-400 font-mono">
-          KALSHI INTELLIGENCE PLATFORM
+          🥜 PEANUT'S ECON INTELLIGENCE PLATFORM
         </h1>
         <span className="relative flex h-2.5 w-2.5">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -381,7 +381,7 @@ export default function App() {
         <ReleasesTimeline releases={releases} />
         <SignalCascade models={models} />
         <footer className="text-center text-xs text-slate-700 py-4 font-mono">
-          OPENCLAW SYSTEMS — KALSHI INTELLIGENCE PLATFORM
+          🥜 PEANUT'S ECON INTELLIGENCE PLATFORM — OPENCLAW SYSTEMS
         </footer>
       </main>
     </div>
