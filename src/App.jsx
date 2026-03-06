@@ -269,25 +269,29 @@ function ReleasesTimeline({ releases }) {
 // --- Backtest ---
 function BacktestPanel({ backtest }) {
   if (!backtest) return null
+  // API returns nested structure: backtest.cpi.win_pct, backtest.combined_sharpe
+  const sharpe = backtest.combined_sharpe ?? backtest.sharpe ?? 0
+  const combinedPnl = backtest.combined_pnl ?? 0
+  const totalBets = backtest.total_bets ?? 0
   const bars = [
-    { label: 'CPI', rate: backtest.cpi_win_rate, color: '#facc15' },
-    { label: 'GDP', rate: backtest.gdp_win_rate, color: '#14b8a6' },
-    { label: 'Fed', rate: backtest.fed_win_rate, color: '#2dd4bf' },
+    { label: 'CPI', rate: (backtest.cpi?.win_pct ?? backtest.cpi_win_rate * 100 ?? 0) / 100, color: '#facc15' },
+    { label: 'GDP', rate: (backtest.gdp?.win_pct ?? backtest.gdp_win_rate * 100 ?? 0) / 100, color: '#14b8a6' },
+    { label: 'Fed', rate: (backtest.fed?.win_pct ?? backtest.fed_win_rate * 100 ?? 0) / 100, color: '#2dd4bf' },
   ]
   return (
     <Card>
       <Label>Backtest Performance</Label>
       <div className="grid grid-cols-2 gap-6 mt-2">
         <div>
-          <div className="text-4xl font-bold font-mono text-gold-400">{backtest.sharpe.toFixed(2)}</div>
+          <div className="text-4xl font-bold font-mono text-yellow-400">{sharpe.toFixed(2)}</div>
           <div className="text-xs text-slate-500">Sharpe Ratio</div>
           <div className="mt-3 text-sm font-mono">
             <span className="text-slate-400">Combined P&L: </span>
-            <span className="text-emerald-400 font-semibold">${backtest.combined_pnl.toFixed(2)}</span>
+            <span className="text-emerald-400 font-semibold">${combinedPnl.toFixed(2)}</span>
           </div>
           <div className="text-sm font-mono">
             <span className="text-slate-400">Total Bets: </span>
-            <span className="text-white">{backtest.total_bets.toLocaleString()}</span>
+            <span className="text-white">{totalBets.toLocaleString()}</span>
           </div>
         </div>
         <div className="space-y-3">
