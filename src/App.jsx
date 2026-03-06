@@ -7,7 +7,7 @@ function useFetch(endpoint, interval = 60000) {
   const [loading, setLoading] = useState(true)
   useEffect(() => {
     const load = () =>
-      fetch(`${API}/${endpoint}`)
+      fetch(`${API}/${endpoint}`, { cache: 'no-store' })
         .then(r => r.json())
         .then(d => { setData(d); setLoading(false) })
         .catch(() => setLoading(false))
