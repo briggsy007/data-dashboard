@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 
-const API = 'http://localhost:8000/api'
+const API = '/api'
 
 function useFetch(endpoint, interval = 60000) {
   const [data, setData] = useState(null)
