@@ -41,21 +41,21 @@ KALSHI_BASE = os.getenv("KALSHI_BASE_URL", "https://api.elections.kalshi.com/tra
 KALSHI_API_KEY = os.getenv("KALSHI_API_KEY", "")
 PRIVATE_KEY_PATH = os.getenv("KALSHI_PRIVATE_KEY_PATH", "")
 
-DATA_ROOT = Path(r"C:\Users\hunte\.openclaw\workspace\polymarket-btc\data")
-ECON_ROOT = Path(r"C:\Users\hunte\.openclaw\workspace\kalshi-econ\data")
-MODELS_ROOT = Path(r"C:\Users\hunte\.openclaw\workspace\kalshi-econ\models")
+DATA_ROOT = Path(os.getenv("DATA_ROOT", "/home/kalshi/polymarket-btc/data"))
+ECON_ROOT = Path(os.getenv("ECON_ROOT", "/home/kalshi/kalshi-econ/data"))
+MODELS_ROOT = Path(os.getenv("MODELS_ROOT", "/home/kalshi/kalshi-econ/models"))
 
 
 def _get_kalshi_client():
     """Lazy-load KalshiClient from the econ project."""
     import sys
-    econ_src = Path(r"C:\Users\hunte\.openclaw\workspace\kalshi-econ\src")
+    econ_src = Path(os.getenv("ECON_SRC", "/home/kalshi/kalshi-econ/src"))
     if str(econ_src) not in sys.path:
         sys.path.insert(0, str(econ_src))
     from trading.kalshi_client import KalshiClient
     return KalshiClient(
         key_id=KALSHI_API_KEY,
-        private_key_path=PRIVATE_KEY_PATH or str(Path(r"C:\Users\hunte\.openclaw\workspace\polymarket-btc\kalshi_private_key.pem")),
+        private_key_path=PRIVATE_KEY_PATH or "/home/kalshi/polymarket-btc/kalshi_private_key.pem",
     )
 
 
@@ -271,7 +271,7 @@ def api_gdp_ladder():
             raise FileNotFoundError("gdp_thresholds.joblib not found")
 
         import sys as _sys
-        econ_src = Path(r"C:\Users\hunte\.openclaw\workspace\kalshi-econ\src")
+        econ_src = Path(os.getenv("ECON_SRC", "/home/kalshi/kalshi-econ/src"))
         if str(econ_src) not in _sys.path:
             _sys.path.insert(0, str(econ_src))
 
