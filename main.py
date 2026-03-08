@@ -392,5 +392,90 @@ def api_backtest():
     }
 
 
+@app.get("/api/market-pulse")
+def api_market_pulse(refresh: bool = False):
+    """
+    Real-time market snapshot — indices, bonds, commodities, forex, crypto, macro, sentiment.
+    Cached for 15 minutes. Pass ?refresh=true to force update.
+    """
+    import json
+    cache_path = ECON_ROOT / "market_pulse.json"
+    max_age_seconds = 900  # 15 minutes
+
+    # Serve from cache if fresh
+    if not refresh and cache_path.exists():
+        age = time.time() - cache_path.stat().st_mtime
+        if age < max_age_seconds:
+            with open(cache_path) as f:
+                data = json.load(f)
+            data["_cache_age_seconds"] = round(age)
+            return data
+
+    # Try to build fresh snapshot
+    try:
+        import sys
+        kalshi_data_src = Path(os.getenv("KALSHI_DATA_SRC", "/home/kalshi/kalshi-data"))
+        if str(kalshi_data_src) not in sys.path:
+            sys.path.insert(0, str(kalshi_data_src))
+        from shared_data_layer.ingest.market_pulse import build_snapshot
+        snapshot = build_snapshot()
+
+        # Save to cache
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(cache_path, "w") as f:
+            json.dump(snapshot, f, default=str)
+
+        snapshot["_cache_age_seconds"] = 0
+        return snapshot
+
+    except Exception as e:
+        # Return stale cache if available
+        if cache_path.exists():
+            with open(cache_path) as f:
+                data = json.load(f)
+            data["_stale"] = True
+            data["_error"] = str(e)
+            return data
+        return {"error": str(e), "message": "Market pulse unavailable"}
+
+
+@app.get("/api/market-brief")
+def api_market_brief():
+    """
+    Generate a formatted market brief string (LLM-ready).
+    Uses cached snapshot if fresh, otherwise fetches live.
+    """
+    import sys
+    kalshi_data_src = Path(os.getenv("KALSHI_DATA_SRC", "/home/kalshi/kalshi-data"))
+    if str(kalshi_data_src) not in sys.path:
+        sys.path.insert(0, str(kalshi_data_src))
+
+    # Get snapshot from cache or live
+    cache_path = ECON_ROOT / "market_pulse.json"
+    snapshot = None
+    if cache_path.exists():
+        age = time.time() - cache_path.stat().st_mtime
+        if age < 900:
+            with open(cache_path) as f:
+                snapshot = json.load(f)
+
+    if snapshot is None:
+        try:
+            from shared_data_layer.ingest.market_pulse import build_snapshot
+            snapshot = build_snapshot()
+        except Exception as e:
+            return {"error": str(e)}
+
+    try:
+        econ_scripts = Path(os.getenv("ECON_SRC", "/home/kalshi/kalshi-econ/src")).parent / "scripts"
+        if str(econ_scripts) not in sys.path:
+            sys.path.insert(0, str(econ_scripts))
+        from morning_brief import generate_brief
+        brief = generate_brief(snapshot)
+        return {"brief": brief, "timestamp": snapshot.get("meta", {}).get("timestamp_est")}
+    except Exception as e:
+        return {"error": str(e)}
+
+
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
